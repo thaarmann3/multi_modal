@@ -1,0 +1,82 @@
+{
+  "robot": {
+    "ip": "169.254.9.43",
+    "control_loop_dt": 0.0025,
+    "joint_goal": [0, -1.5708, 1.5708, 1.5708, -1.5708, 0],
+    "move_speed": 0.5,
+    "move_acceleration": 0.1,
+    "speed_limit": 0.75
+  },
+  "control": {
+    "k_xy": 2.5,
+    "b_xy": 50.0,
+    "k_z": 30.0,
+    "b_z": 90.0
+  },
+  "filter": {
+    "cutoff_freq": 25.0,
+    "filter_order": 4,
+    "deadband_threshold": 1.0,
+    "boundary_force_gain": 1000.0
+  },
+  "tunneling_xy": {
+    "s0": 5.0,
+    "rho": 5.0,
+    "I0": 3.0,
+    "beta_I": 1.0,
+    "alpha_o": 0.05,
+    "vmax_o": 0.20,
+    "eps_grad": 1e-6,
+    "use_angle_gate": true,
+    "cos0": 0.5,
+    "min_grad_norm": 0.02
+  },
+  "tunneling_z": {
+    "s0": 5.0,
+    "rho": 5.0,
+    "I0": 1.5,
+    "beta_I": 1.0,
+    "alpha_o": 0.075,
+    "vmax_o": 0.20,
+    "eps_grad": 1e-6,
+    "min_grad_norm": 0.02
+  },
+  "potential_field_xy": {
+    "x_bounds": [-0.5, 1.0],
+    "y_bounds": [-1.0, 1.0],
+    "resolution": 1000,
+    "scaling_factor": 1.5,
+    "obstacles": [
+      {
+        "x": 0.2,
+        "y": 0.0,
+        "height": 10.0,
+        "width": 0.05
+      },
+      {
+        "x": 0.0,
+        "y": 0.4,
+        "height": 10.0,
+        "width": 0.05
+      }
+    ]
+  },
+  "potential_field_z": {
+    "x_bounds": [-0.5, 0.5],
+    "resolution": 1000,
+    "scaling_factor": 10.0,
+    "alpha": 10.0,
+    "obstacles": [
+      {
+        "x": 0.0,
+        "height": 0.1,
+        "width": 0.05
+      }
+    ]
+  },
+  "logging": {
+    "enabled": true,
+    "trajectory_dir": "trajectories",
+    "filename_prefix": "robot_trajectory_combined"
+  }
+}

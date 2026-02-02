@@ -1,0 +1,27 @@
+# SBERT cached models (downloaded on first run)
+sbert/.models/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Data, logs, saved outputs (keep local only)
+trajectories/
+*.log
+logs/
+data/
+output/
+outputs/
+saved/
+cache/
