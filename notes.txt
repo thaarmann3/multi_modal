@@ -28,8 +28,8 @@ IROS March 2nd Deadline
     - Results
     - Discussion (short)
 
-    Our novelity is combing aritical potential fields with encoder decoder architechure to respond to mutliple input types
-    Weak methodology can be made up for by human trials and proving that it works
+Our novelity is combing aritical potential fields with encoder decoder architechure to respond to mutliple input types
+Weak methodology can be made up for by human trials and proving that it works
 
 -----------------------------------------------------------------------------------------------------------
 

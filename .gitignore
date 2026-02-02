@@ -9,7 +9,6 @@ output/
 outputs/
 saved/
 cache/
-*.txt
 
 # Legacy / archived code (keep local only)
 old/
@@ -168,3 +167,4 @@ __marimo__/
 
 # Abstra
 .abstra/
+notes.txt
