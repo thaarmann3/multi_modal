@@ -13,6 +13,7 @@ cache/
 # Legacy / archived code (keep local only)
 old/
 parameter_testing/
+sentence_to_pf_function_params/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
