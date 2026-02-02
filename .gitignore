@@ -11,6 +11,10 @@ saved/
 cache/
 *.txt
 
+# Legacy / archived code (keep local only)
+old/
+parameter_testing/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
