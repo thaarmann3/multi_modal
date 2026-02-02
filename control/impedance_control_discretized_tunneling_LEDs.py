@@ -189,6 +189,7 @@ print_cfg = config.get("printing", {})
 PRINT_LED_STATUS = print_cfg.get("led_status", False)
 PRINT_STARTUP_INFO = print_cfg.get("startup_info", False)
 PRINT_SHUTDOWN_INTERRUPT = print_cfg.get("shutdown_interrupt", False)
+PRINT_VOICE_TRANSCRIPTION = print_cfg.get("voice_transcription", True)
 PRINT_VOICE_OBSTACLE = print_cfg.get("voice_obstacle", False)
 PRINT_LOOP_RATE = print_cfg.get("loop_rate", False)
 PRINT_SHUTDOWN_MESSAGE = print_cfg.get("shutdown_message", False)
@@ -271,6 +272,7 @@ field_bore_strength_multiplier = pf_config.get("field_bore_strength_multiplier",
 field_bore_reduction_curve = pf_config.get("field_bore_reduction_curve", 1.0)
 bore_strength_accumulation_rate = pf_config.get("bore_strength_accumulation_rate", 0.05)
 bore_width_default = pf_config.get("bore_width_default", 0.5)  # Bore radius/spatial extent
+OBS_DELTA = pf_config.get("obs_delta", 0.1)  # Max Euclidean distance (ridge vs nn) to add voice obstacle
 pf_xy = PotentialFieldDiscreteRemodelable(
     x_bounds=tuple(pf_config["x_bounds"]),
     y_bounds=tuple(pf_config["y_bounds"]),
@@ -282,6 +284,9 @@ pf_xy = PotentialFieldDiscreteRemodelable(
     bore_strength_accumulation_rate=bore_strength_accumulation_rate,  # How fast strength accumulates
     bore_width_default=bore_width_default,  # Bore radius/spatial extent (smaller = narrower bores)
 )
+# Reset field on startup so each run starts from config-only obstacles and no bores
+pf_xy.clear_obstacles()
+pf_xy.clear_bores(clear_field_bores=True)
 
 # Setup CSV logging
 log_config = config["logging"]
@@ -348,7 +353,7 @@ if PRINT_STARTUP_INFO:
 # Voice pipeline: STT → SBERT → PF params; new obstacle added to field when speech detected (one-time use)
 pipeline = EmbeddingToPFPipeline()
 _ = pipeline.model
-pipeline.start_background(use_nn=True, print_params=False)
+pipeline.start_background(use_ridge=True, use_nn=True, print_params=False)
 time.sleep(0.5)
 
 rtde_c.moveL([qx_init, qy_init, qz_init, 0, 0, 0], MOVE_ACCELERATION, MOVE_ACCELERATION)
@@ -449,15 +454,20 @@ while True:
         gradV = -potential_force
         grad_norm = float(np.linalg.norm(gradV))
 
-        # Voice: if new obstacle params from speech, add obstacle to field (one-time per utterance)
+        # Voice: add obstacle only if ridge–nn Euclidean distance <= obs_delta (one-time per utterance)
         sentence, emb, ridge, nn = pipeline.get_latest()
-        if nn is not None:
-            pf_xy.add_obstacle(nn["x_m"], nn["y_m"], nn["amplitude"], nn["radius"])
-            potential_force = -get_potential_force_xy(q_0_xy)
-            gradV = -potential_force
-            grad_norm = float(np.linalg.norm(gradV))
-            if PRINT_VOICE_OBSTACLE:
-                print(f"[voice] added obstacle: x_m={nn['x_m']:.3f}, y_m={nn['y_m']:.3f}, amp={nn['amplitude']:.1f}, r={nn['radius']:.3f}", flush=True)
+        if sentence is not None and PRINT_VOICE_TRANSCRIPTION:
+            print(f"[transcription] {sentence}", flush=True)
+        if nn is not None and ridge is not None:
+            rv = np.array([ridge["x_m"], ridge["y_m"]], dtype=np.float64)
+            nv = np.array([nn["x_m"], nn["y_m"]], dtype=np.float64)
+            if np.linalg.norm(rv - nv) <= OBS_DELTA:
+                pf_xy.add_obstacle(nn["x_m"], nn["y_m"], nn["amplitude"], nn["radius"])
+                potential_force = -get_potential_force_xy(q_0_xy)
+                gradV = -potential_force
+                grad_norm = float(np.linalg.norm(gradV))
+                if PRINT_VOICE_OBSTACLE:
+                    print(f"[voice] added obstacle: x_m={nn['x_m']:.3f}, y_m={nn['y_m']:.3f}, amp={nn['amplitude']:.1f}, r={nn['radius']:.3f}", flush=True)
         
         # Tunneling logic (matching simulation exactly)
         if grad_norm < min_grad_norm:

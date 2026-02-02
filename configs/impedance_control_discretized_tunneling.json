@@ -4,8 +4,8 @@
     "control_loop_dt": 500.0,
     "joint_goal": [3.14159, -1.5708, 1.5708, 1.5708, -1.5708, 0],
     "move_speed": 0.5,
-    "move_acceleration": 0.1,
-    "speed_limit": 1.5,
+    "move_acceleration": 0.25,
+    "speed_limit": 0.1,
     "speedl_acceleration": 0.25
   },
   "control": {
@@ -38,9 +38,8 @@
     "field_bore_reduction_curve": 0.9,
     "bore_strength_accumulation_rate": 0.1,
     "bore_width_default": 0.2,
-    "obstacles": [
-      
-    ]
+    "obs_delta": 0.1,
+    "obstacles": [ ]
   },
   "field_bores": {
     "gamma_threshold": 0.15,
@@ -70,6 +69,7 @@
     "led_status": false,
     "startup_info": false,
     "shutdown_interrupt": false,
+    "voice_transcription": true,
     "voice_obstacle": false,
     "loop_rate": false,
     "shutdown_message": false,

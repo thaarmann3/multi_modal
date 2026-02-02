@@ -256,7 +256,7 @@ class EmbeddingToPFPipeline:
 def run_embedding_to_pf_subscriber(stt_config: Optional[STTConfig] = None, model_name: str = DEFAULT_MODEL_NAME,
     sbert_cache_dir: Optional[Union[Path, str]] = None,
     params_callback: Optional[Callable[[str, np.ndarray, Optional[dict], Optional[dict]], None]] = None,
-    print_params: bool = True, use_ridge: bool = False, use_nn: bool = True) -> None:
+    print_params: bool = True, use_ridge: bool = True, use_nn: bool = True) -> None:
     model = _load_sbert_model(model_name, sbert_cache_dir)
     pub = STTPublisher(stt_config or STTConfig())
     pub.subscribe(_make_on_transcript(model, print_params, params_callback, use_ridge, use_nn))
