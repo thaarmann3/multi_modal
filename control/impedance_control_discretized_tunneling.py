@@ -38,7 +38,7 @@ PRINT_INTERVAL = config["visualization"]["print_interval"]
 
 # Control parameters
 DAMPING = config["control"]["damping"]
-STIFFNESS = config["control"]["stiffness"]
+#STIFFNESS = config["control"]["stiffness"]
 FORCE_SCALE = config["control"]["force_scale"]
 
 # Filter parameters
@@ -159,7 +159,7 @@ print(f"Nominal position: [{o_nom[0]:.4f}, {o_nom[1]:.4f}] m")
 print(f"Potential field bounds: x={pf_xy.x_bounds}, y={pf_xy.y_bounds}")
 print(f"Added {len(pf_xy.obstacles)} obstacles")
 
-rtde_c.moveL([qx_init, qy_init, qz_init, 0, 0, 0], MOVE_ACCELERATION, MOVE_ACCELERATION)
+rtde_c.moveL([qx_init, qy_init, qz_init, 0, 0, 0], MOVE_SPEED, MOVE_ACCELERATION)
 time.sleep(0.5)
 print("Moved to goal position")
 rtde_c.zeroFtSensor()
@@ -299,10 +299,10 @@ while True:
                     if not updated_existing:
                         last_field_bore_time = current_time
         
-        # Impedance control (matching simulation dynamics: velocity = (potential_force + stiffness * external_force) / damping)
+        # Impedance control (dashpot only, no spring)
         # Use the most up-to-date potential_force (recalculated after bore updates if bores were updated)
         qdot = np.zeros(6)
-        qdot[:2] = STIFFNESS * (potential_force + f_ext) / DAMPING
+        qdot[:2] = (potential_force + f_ext) / DAMPING
         qdot = np.clip(qdot, -SPEED_LIMIT, SPEED_LIMIT)
         
         # Use configurable acceleration limit for speedL

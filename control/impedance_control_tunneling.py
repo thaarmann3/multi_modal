@@ -146,7 +146,7 @@ intent_I_z = 0.0
 print(f"Nominal position: [{o_nom[0]:.4f}, {o_nom[1]:.4f}] m")
 print(f"Nominal Z: {o_nom_z:.4f} m")
 
-rtde_c.moveL([qx_init, qy_init, qz_init, 0, 0, 0], MOVE_ACCELERATION, MOVE_ACCELERATION)
+rtde_c.moveL([qx_init, qy_init, qz_init, 0, 0, 0], MOVE_SPEED, MOVE_ACCELERATION)
 time.sleep(0.5)
 print("Moved to goal position")
 rtde_c.zeroFtSensor()

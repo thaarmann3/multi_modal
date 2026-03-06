@@ -9,8 +9,7 @@
     "speedl_acceleration": 0.25
   },
   "control": {
-    "damping": 200.0,
-    "stiffness": 5.0,
+    "damping": 40.0,
     "force_scale": 15.0
   },
   "filter": {
