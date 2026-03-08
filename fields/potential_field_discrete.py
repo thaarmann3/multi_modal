@@ -214,6 +214,7 @@ class PotentialFieldDiscreteRemodelable(PotentialFieldDiscrete):
                  # Bore size and shape parameters
                  bore_width_default=0.5,  # Default width for field bores (spatial extent)
                  obstacle_bore_width_multiplier=2.0,  # Obstacle bore width = obstacle_width * this multiplier
+                 obstacle_bore_distance_falloff_multiplier=None,  # If set, overrides distance_falloff for obstacle bores only (smaller = tighter)
                  
                  # Bore directional masking parameters
                  side_mask_sharpness=0.3,  # Controls sharpness of directional transition (lower = sharper)
@@ -252,6 +253,7 @@ class PotentialFieldDiscreteRemodelable(PotentialFieldDiscrete):
         # Store bore behavior parameters
         self.bore_width_default = bore_width_default
         self.obstacle_bore_width_multiplier = obstacle_bore_width_multiplier
+        self.obstacle_bore_distance_falloff_multiplier = obstacle_bore_distance_falloff_multiplier
         self.side_mask_sharpness = side_mask_sharpness
         self.distance_falloff_multiplier = distance_falloff_multiplier
         self.obstacle_bore_strength_multiplier = obstacle_bore_strength_multiplier
@@ -368,8 +370,9 @@ class PotentialFieldDiscreteRemodelable(PotentialFieldDiscrete):
         # Use smooth transition to avoid sharp edges
         side_mask = 1.0 / (1.0 + np.exp(-projection / (bore['width'] * self.side_mask_sharpness)))
         
-        # Distance-based falloff from obstacle center
-        dist_falloff = np.exp(-dist**2 / (2 * (bore['width'] * self.distance_falloff_multiplier)**2))
+        # Distance-based falloff from obstacle center (obstacle bores can use tighter falloff)
+        falloff_mult = self.obstacle_bore_distance_falloff_multiplier if self.obstacle_bore_distance_falloff_multiplier is not None else self.distance_falloff_multiplier
+        dist_falloff = np.exp(-dist**2 / (2 * (bore['width'] * falloff_mult)**2))
         
         # Combine: stronger effect closer to obstacle and on the correct side
         bore_mask = side_mask * dist_falloff

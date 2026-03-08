@@ -1,0 +1,111 @@
+{
+  "robot": {
+    "ip": "169.254.9.43",
+    "control_loop_dt": 500.0,
+    "joint_goal": [3.14159, -1.5708, 1.5708, 1.5708, -1.5708, 0],
+    "move_speed": 0.5,
+    "move_acceleration": 0.25,
+    "speed_limit": 0.07,
+    "speedl_acceleration": 0.06,
+    "payload_mass_kg": 1.5,
+    "payload_cog": [0.0, 0.0, 0.0]
+  },
+  "control": {
+    "damping": 380.0,
+    "stiffness": 0.6,
+    "force_scale": 15.0
+  },
+  "filter": {
+    "cutoff_freq": 12.0,
+    "filter_order": 4,
+    "deadband_threshold": 5.0
+  },
+  "tunneling": {
+    "s0": 3.0,
+    "rho": 9.0,
+    "I0": 5.0,
+    "beta_I": 0.5,
+    "eps_grad": 1e-6,
+    "use_angle_gate": true,
+    "cos0": 0.75,
+    "min_grad_norm": 10.0
+  },
+  "potential_field": {
+    "x_bounds": [-1.5, 1.5],
+    "y_bounds": [-1.5, 1.5],
+    "resolution": 200,
+    "alpha": 200.0,
+    "force_alignment_threshold": 0.85,
+    "field_bore_strength_multiplier": 0.2,
+    "obstacle_bore_width_multiplier": 0.9,
+    "obstacle_bore_strength_multiplier": 0.2,
+    "obstacle_bore_distance_falloff_multiplier": 0.6,
+    "field_bore_reduction_curve": 0.9,
+    "bore_strength_accumulation_rate": 0.08,
+    "bore_width_default": 0.2,
+    "obs_delta": 0.25,
+    "obstacles": [
+      {
+        "x": 0.55,
+        "y": 0.55,
+        "height": 100.0,
+        "width": 0.3
+      },
+      {
+        "x": -0.55,
+        "y": -0.55,
+        "height": 100.0,
+        "width": 0.3
+      }
+    ]
+  },
+  "field_bores": {
+    "gamma_threshold": 0.12,
+    "cooldown_seconds": 0.4
+  },
+  "hrt": {
+    "cardinal_target_distance_m": 0.15,
+    "target_reach_tolerance_m": 0.03,
+    "sit_to_stand_bar_offset_m": 0.2
+  },
+  "visualization": {
+    "enabled": true,
+    "plot_update_interval": 40,
+    "print_interval": 100
+  },
+  "leds": {
+    "port": "/dev/cu.usbmodem1101",
+    "baud": 250000,
+    "count": 16,
+    "radius": 0.016,
+    "max_brightness": 30,
+    "update_hz": 30,
+    "grad_to_brightness_gain": 2,
+    "grad_deadband": 5
+  },
+  "logging": {
+    "enabled": true,
+    "trajectory_dir": "trajectories",
+    "filename_prefix": "robot_trajectory_discretized",
+    "hrt_metrics_dir": "hrt_metrics",
+    "hrt_metrics_prefix": "hrt_trial"
+  },
+  "printing": {
+    "led_status": true,
+    "startup_info": true,
+    "shutdown_interrupt": false,
+    "voice_transcription": true,
+    "voice_obstacle": true,
+    "loop_rate": false,
+    "shutdown_message": true,
+    "log_saved": false
+  },
+  "voice": {
+    "keywords": ["robot", "handlebar"],
+    "require_similarity": false,
+    "debug_skip": false,
+    "obstacle_distance_scale": 2.0,
+    "obstacle_amplitude_scale": 2.5,
+    "obstacle_min_distance_m": 0.08
+  }
+}
