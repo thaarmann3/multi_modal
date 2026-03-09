@@ -1,0 +1,2 @@
+timestamp,modality,modality_name,trial_type,trial_direction,time_to_target_s,target_distance_m,max_force_N,total_distance_traveled_m,distance_from_target_m,target_x,target_y,final_x,final_y,qualitative_score,sit_to_stand_mode
+2026-03-09T13:54:28.810894,2,Touch,cardinal,north,14.03,0.1500,44.44,0.2628,0.0415,0.0,0.15,-0.03428782750979026,0.12665965756263156,,False

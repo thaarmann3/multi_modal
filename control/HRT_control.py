@@ -15,7 +15,8 @@ Operator commands (type in terminal, press Enter):
   position_bar right   - Move bar right of user (for sit-to-stand trials)
   start_trial <dir>    - Start cardinal trial (dir: north, south, east, west)
   start_trial          - Start sit-to-stand trial (when in sit_to_stand mode, no target, manual end)
-  end_trial            - Manually end trial and record metrics
+  end_trial / stop     - End trial and record metrics (type 'stop' to end; no auto-termination)
+  lock / unlock        - Freeze robot at current position (lock) or resume (unlock); records peak/total force
   qualitative <1-7>    - Record qualitative score for current modality
   sit_to_stand         - Toggle sit-to-stand trial mode
   quit                 - Shutdown
@@ -239,6 +240,9 @@ VOICE_OBSTACLE_DISTANCE_SCALE = voice_config.get("obstacle_distance_scale", 2.0)
 VOICE_OBSTACLE_AMPLITUDE_SCALE = voice_config.get("obstacle_amplitude_scale", 2.5)
 VOICE_OBSTACLE_MIN_DISTANCE_M = voice_config.get("obstacle_min_distance_m", 0.08)
 VOICE_OBSTACLE_MIN_RADIUS_M = voice_config.get("obstacle_min_radius_m", 0.03)
+# Obstacle repels: to move robot left, place obstacle on robot's right (opposite side). Model gives
+# desired movement direction; we negate to get obstacle position on the repelling side.
+VOICE_OBSTACLE_OPPOSITE_SIDE = voice_config.get("obstacle_opposite_side", True)
 
 # Visualization
 ENABLE_LIVE_VISUALIZATION = config["visualization"]["enabled"]
@@ -312,6 +316,8 @@ hrt_state = {
     "trial_start_time": None,
     "trial_max_force": 0.0,
     "trial_start_pos": None,
+    "trial_distance_traveled_m": 0.0,
+    "trial_last_pos": None,  # [x, y] for distance accumulation
     "trial_type": None,  # "cardinal" or "sit_to_stand"
     "trial_direction": None,  # north, south, east, west
     "qualitative_scores": [],  # [(modality, score, trial_type), ...]
@@ -320,7 +326,10 @@ hrt_state = {
     "shutdown_requested": False,
     "sit_to_stand_mode": False,  # Bar offset for sit-to-stand
     "position_bar_requested": None,  # ("left"|"right", offset_m) or None
-    "lock": threading.Lock(),
+    "locked": False,  # lock/unlock: freeze robot, no feedback, record force
+    "lock_peak_force_N": 0.0,
+    "lock_total_force_Ns": 0.0,  # integral of |F| dt
+    "lock": threading.RLock(),  # RLock so process_commands can call _record_trial_metrics (same thread)
 }
 
 # Cardinal direction -> target offset (relative to global min 0,0)
@@ -334,7 +343,7 @@ CARDINAL_OFFSETS = {
 
 def input_thread_fn():
     """Background thread: read operator commands from stdin."""
-    print("\n[HRT] Operator commands: modality <1-5>, reset, start_trial <north|south|east|west>, end_trial, qualitative <1-7>, sit_to_stand, quit\n")
+    print("\n[HRT] Operator commands: modality <1-5>, reset, start_trial, end_trial/stop, lock/unlock, qualitative <1-7>, sit_to_stand, quit\n")
     while True:
         try:
             line = sys.stdin.readline()
@@ -431,8 +440,9 @@ hrt_metrics_file = open(hrt_metrics_path, 'w', newline='')
 hrt_metrics_writer = csv.writer(hrt_metrics_file)
 hrt_metrics_writer.writerow([
     'timestamp', 'modality', 'modality_name', 'trial_type', 'trial_direction',
-    'time_to_target_s', 'target_distance_m', 'max_force_N', 'deviation_m', 'target_x', 'target_y',
-    'final_x', 'final_y', 'qualitative_score', 'sit_to_stand_mode'
+    'time_to_target_s', 'target_distance_m', 'max_force_N', 'total_distance_traveled_m',
+    'distance_from_target_m', 'target_x', 'target_y', 'final_x', 'final_y',
+    'qualitative_score', 'sit_to_stand_mode'
 ])
 
 # Voice pipeline
@@ -591,12 +601,15 @@ def process_commands():
                     hrt_state["trial_active"] = True
                     hrt_state["trial_start_time"] = time.time()
                     hrt_state["trial_max_force"] = 0.0
+                    hrt_state["trial_distance_traveled_m"] = 0.0
                     qx, qy, _, _, _, _ = rtde_r.getActualTCPPose()
-                    hrt_state["trial_start_pos"] = np.array([qx, qy]) - o_nom
+                    start_rel = np.array([qx, qy]) - o_nom
+                    hrt_state["trial_start_pos"] = start_rel.copy()
+                    hrt_state["trial_last_pos"] = start_rel.copy()
                     tgt = hrt_state["trial_target_xy"]
                     print(f"[HRT] Trial started: {hrt_state['trial_type']}" + (f", target={tgt}" if tgt is not None else " (manual end)"))
 
-                if cmd in ("end_trial", "et"):
+                if cmd in ("end_trial", "et", "stop"):
                     if hrt_state["trial_active"]:
                         _record_trial_metrics()
                         hrt_state["trial_active"] = False
@@ -604,6 +617,24 @@ def process_commands():
                         print("[HRT] Trial ended, metrics recorded.")
                     else:
                         print("[HRT] No active trial.")
+
+                if cmd == "lock":
+                    if not hrt_state.get("locked"):
+                        hrt_state["locked"] = True
+                        hrt_state["lock_peak_force_N"] = 0.0
+                        hrt_state["lock_total_force_Ns"] = 0.0
+                        print("[HRT] Locked: robot frozen at current position. Type 'unlock' to resume.")
+                    else:
+                        print("[HRT] Already locked.")
+
+                if cmd == "unlock":
+                    if hrt_state.get("locked"):
+                        peak = hrt_state.get("lock_peak_force_N", 0.0)
+                        total_ns = hrt_state.get("lock_total_force_Ns", 0.0)
+                        print(f"[HRT] Unlocked. Lock metrics: peak_force={peak:.2f} N, total_force_integral={total_ns:.2f} N·s")
+                        hrt_state["locked"] = False
+                    else:
+                        print("[HRT] Not locked.")
 
                 if cmd in ("qualitative", "qual"):
                     if args and args[0].isdigit():
@@ -613,7 +644,7 @@ def process_commands():
                             trial_type = hrt_state.get("trial_type") or "N/A"
                             hrt_metrics_writer.writerow([
                                 datetime.now().isoformat(), mod, MODALITY_NAMES.get(mod, ""),
-                                "qualitative", "", "", "", "", "", "", "", "", "", score,
+                                "qualitative", "", "", "", "", "", "", "", "", "", "", score,
                                 hrt_state.get("sit_to_stand_mode", False)
                             ])
                             hrt_metrics_file.flush()
@@ -638,6 +669,7 @@ def _record_trial_metrics():
         direction = hrt_state.get("trial_direction", "")
         start_time = hrt_state.get("trial_start_time")
         max_force = hrt_state.get("trial_max_force", 0.0)
+        total_distance = hrt_state.get("trial_distance_traveled_m", 0.0)
         target_xy = hrt_state.get("trial_target_xy")
 
     qx, qy, _, _, _, _ = rtde_r.getActualTCPPose()
@@ -645,7 +677,7 @@ def _record_trial_metrics():
 
     time_to_target = (time.time() - start_time) if start_time else None
     target_distance = np.linalg.norm(target_xy) if target_xy is not None else None
-    deviation = np.linalg.norm(final_rel - target_xy) if target_xy is not None else None
+    distance_from_target = np.linalg.norm(final_rel - target_xy) if target_xy is not None else None
 
     hrt_metrics_writer.writerow([
         datetime.now().isoformat(), mod, MODALITY_NAMES.get(mod, ""),
@@ -653,7 +685,8 @@ def _record_trial_metrics():
         f"{time_to_target:.2f}" if time_to_target is not None else "",
         f"{target_distance:.4f}" if target_distance is not None else "",
         f"{max_force:.2f}" if max_force is not None else "",
-        f"{deviation:.4f}" if deviation is not None else "",
+        f"{total_distance:.4f}",
+        f"{distance_from_target:.4f}" if distance_from_target is not None else "",
         target_xy[0] if target_xy is not None else "",
         target_xy[1] if target_xy is not None else "",
         final_rel[0], final_rel[1],
@@ -661,6 +694,11 @@ def _record_trial_metrics():
         hrt_state.get("sit_to_stand_mode", False)
     ])
     hrt_metrics_file.flush()
+
+    # Print trial summary
+    time_s = f"{time_to_target:.2f}" if time_to_target is not None else "N/A"
+    dist_from_tgt = f"{distance_from_target*100:.1f} cm" if distance_from_target is not None else "N/A"
+    print(f"[HRT] Trial metrics: total_distance={total_distance*100:.1f} cm, distance_from_target={dist_from_tgt}, time={time_s} s")
 
 
 # Start input thread
@@ -709,9 +747,10 @@ while True:
         q_0_xy = np.array([qx, qy]) - o_nom
 
         mod = hrt_state["modality"]
+        locked = hrt_state.get("locked", False)
 
-        # LED feedback (only when modality includes LED)
-        use_led = mod in (MODALITY_TOUCH_LED, MODALITY_TOUCH_VOICE_LED)
+        # LED feedback (only when modality includes LED and not locked)
+        use_led = (not locked) and mod in (MODALITY_TOUCH_LED, MODALITY_TOUCH_VOICE_LED)
         if use_led:
             _t_now = time.monotonic()
             if _t_now >= _next_led_t:
@@ -727,27 +766,35 @@ while True:
         F_inp[np.abs(F_inp) < DEADBAND_THRESHOLD] = 0.0
         f_ext = F_inp.copy()
 
-        # Update trial max force
+        # Update lock force metrics when locked
+        if locked:
+            force_mag = np.linalg.norm(f_ext)
+            with hrt_state["lock"]:
+                if force_mag > hrt_state.get("lock_peak_force_N", 0):
+                    hrt_state["lock_peak_force_N"] = force_mag
+                hrt_state["lock_total_force_Ns"] = hrt_state.get("lock_total_force_Ns", 0) + force_mag * DT
+
+        # Update trial max force and distance traveled
         if hrt_state.get("trial_active"):
             force_mag = np.linalg.norm(f_ext)
             if force_mag > hrt_state.get("trial_max_force", 0):
                 with hrt_state["lock"]:
                     hrt_state["trial_max_force"] = force_mag
-
-        # Check if target reached (auto-end trial)
-        if hrt_state.get("trial_active") and hrt_state.get("trial_target_xy") is not None:
-            target = np.array(hrt_state["trial_target_xy"])
-            dist_to_target = np.linalg.norm(q_0_xy - target)
-            if dist_to_target <= TARGET_REACH_TOLERANCE_M:
-                _record_trial_metrics()
+            last_pos = hrt_state.get("trial_last_pos")
+            if last_pos is not None:
+                step_dist = np.linalg.norm(q_0_xy - last_pos)
                 with hrt_state["lock"]:
-                    hrt_state["trial_active"] = False
-                    hrt_state["trial_target_xy"] = None
-                if PRINT_STARTUP_INFO:
-                    print(f"[HRT] Target reached! Deviation ~{dist_to_target*100:.1f} cm")
+                    hrt_state["trial_distance_traveled_m"] = hrt_state.get("trial_distance_traveled_m", 0) + step_dist
+                    hrt_state["trial_last_pos"] = q_0_xy.copy()
 
+        # --- Lock: freeze at current position (no feedback, no movement) ---
+        if locked:
+            qdot = np.zeros(6)
+            rtde_c.speedL(qdot, SPEEDL_ACCELERATION, DT)
+            potential_force = np.zeros(2)
+            gamma = 0.0
         # --- Fixed bar: hold position, no movement ---
-        if mod == MODALITY_FIXED:
+        elif mod == MODALITY_FIXED:
             qdot = np.zeros(6)
             rtde_c.speedL(qdot, SPEEDL_ACCELERATION, DT)
             potential_force = np.zeros(2)
@@ -769,10 +816,14 @@ while True:
                     similarity_ok = check_similarity(ridge, nn, OBS_DELTA) if VOICE_REQUIRE_SIMILARITY else (nn is not None)
                     if keyword_ok and similarity_ok and nn is not None:
                         # Filter: push obstacle farther from handlebar, increase amplitude (stabler behavior)
+                        # Obstacle repels: to move robot left, place obstacle on robot's right. Model gives
+                        # desired movement direction; negate to place obstacle on opposite (repelling) side.
                         offset = np.array([nn["x_m"], nn["y_m"]], dtype=float)
+                        if VOICE_OBSTACLE_OPPOSITE_SIDE:
+                            offset = -offset
                         dist = float(np.linalg.norm(offset))
                         if dist < 1e-6:
-                            offset = np.array([0.1, 0.0])  # default: right
+                            offset = np.array([0.1, 0.0])
                             dist = 0.1
                         direction = offset / dist
                         new_dist = max(dist * VOICE_OBSTACLE_DISTANCE_SCALE, VOICE_OBSTACLE_MIN_DISTANCE_M)

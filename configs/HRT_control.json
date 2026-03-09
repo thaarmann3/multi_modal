@@ -103,8 +103,9 @@
     "keywords": ["robot", "handlebar"],
     "require_similarity": false,
     "debug_skip": false,
-    "obstacle_distance_scale": 2.0,
-    "obstacle_amplitude_scale": 2.5,
-    "obstacle_min_distance_m": 0.08
+    "obstacle_distance_scale": 1.5,
+    "obstacle_amplitude_scale": 3.0,
+    "obstacle_min_distance_m": 0.05,
+    "obstacle_opposite_side": true
   }
 }
