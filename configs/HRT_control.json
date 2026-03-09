@@ -11,8 +11,7 @@
     "payload_cog": [0.0, 0.0, 0.0]
   },
   "control": {
-    "damping": 380.0,
-    "stiffness": 0.6,
+    "damping": 633,
     "force_scale": 15.0
   },
   "filter": {
