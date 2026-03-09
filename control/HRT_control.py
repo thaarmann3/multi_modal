@@ -186,7 +186,6 @@ PAYLOAD_COG = config["robot"].get("payload_cog", [0.0, 0.0, 0.0])
 
 # Control parameters
 DAMPING = config["control"]["damping"]
-STIFFNESS = config["control"]["stiffness"]
 FORCE_SCALE = config["control"]["force_scale"]
 
 # Filter parameters
@@ -833,7 +832,7 @@ while True:
                         last_field_bore_time = current_time
 
             qdot = np.zeros(6)
-            qdot[:2] = STIFFNESS * (potential_force + f_ext) / DAMPING
+            qdot[:2] = (potential_force + f_ext) / DAMPING
             qdot = np.clip(qdot, -SPEED_LIMIT, SPEED_LIMIT)
             rtde_c.speedL(qdot, SPEEDL_ACCELERATION, DT)
 
