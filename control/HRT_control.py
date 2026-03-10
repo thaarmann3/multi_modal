@@ -440,13 +440,13 @@ hrt_metrics_file = open(hrt_metrics_path, 'w', newline='')
 hrt_metrics_writer = csv.writer(hrt_metrics_file)
 hrt_metrics_writer.writerow([
     'timestamp', 'modality', 'modality_name', 'trial_type', 'trial_direction',
-    'time_to_target_s', 'target_distance_m', 'max_force_N', 'total_distance_traveled_m',
-    'distance_from_target_m', 'target_x', 'target_y', 'final_x', 'final_y',
+    'time_to_target_s', 'target_distance_m', 'max_force_N', 'total_force_Ns',
+    'total_distance_traveled_m', 'distance_from_target_m', 'target_x', 'target_y', 'final_x', 'final_y',
     'qualitative_score', 'sit_to_stand_mode'
 ])
 
-# Voice pipeline
-pipeline = EmbeddingToPFPipeline()
+# Voice pipeline (strip keyword before encoding so only command part is passed to SBERT)
+pipeline = EmbeddingToPFPipeline(keywords=VOICE_KEYWORDS)
 _ = pipeline.model
 pipeline.start_background(use_ridge=True, use_nn=True, print_params=False)
 time.sleep(0.5)
@@ -509,16 +509,19 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 def reset_to_global_minimum(rtde_ctrl, rtde_recv, o_nom_abs, qz):
-    """Move robot to global minimum (center), clear bores."""
+    """Move robot to global minimum (center), clear bores and voice obstacles, restore default obstacles."""
     rtde_ctrl.speedStop()
     time.sleep(0.1)
     target_abs = np.array([o_nom_abs[0], o_nom_abs[1], qz, 0, 0, 0])
     rtde_ctrl.moveL(target_abs.tolist(), MOVE_ACCELERATION, MOVE_ACCELERATION)
     time.sleep(0.5)
+    pf_xy.clear_obstacles()
+    for obs in pf_config["obstacles"]:
+        pf_xy.add_obstacle(obs["x"], obs["y"], obs["height"], obs["width"])
     pf_xy.clear_bores(clear_field_bores=True)
     rtde_ctrl.zeroFtSensor()
     if PRINT_STARTUP_INFO:
-        print("[HRT] Reset to global minimum, bores cleared.")
+        print("[HRT] Reset to global minimum, obstacles and bores cleared.")
 
 
 def process_commands():
@@ -601,6 +604,7 @@ def process_commands():
                     hrt_state["trial_active"] = True
                     hrt_state["trial_start_time"] = time.time()
                     hrt_state["trial_max_force"] = 0.0
+                    hrt_state["trial_total_force_Ns"] = 0.0
                     hrt_state["trial_distance_traveled_m"] = 0.0
                     qx, qy, _, _, _, _ = rtde_r.getActualTCPPose()
                     start_rel = np.array([qx, qy]) - o_nom
@@ -644,7 +648,7 @@ def process_commands():
                             trial_type = hrt_state.get("trial_type") or "N/A"
                             hrt_metrics_writer.writerow([
                                 datetime.now().isoformat(), mod, MODALITY_NAMES.get(mod, ""),
-                                "qualitative", "", "", "", "", "", "", "", "", "", "", score,
+                                "qualitative", "", "", "", "", "", "", "", "", "", "", "", score,
                                 hrt_state.get("sit_to_stand_mode", False)
                             ])
                             hrt_metrics_file.flush()
@@ -669,6 +673,7 @@ def _record_trial_metrics():
         direction = hrt_state.get("trial_direction", "")
         start_time = hrt_state.get("trial_start_time")
         max_force = hrt_state.get("trial_max_force", 0.0)
+        total_force_ns = hrt_state.get("trial_total_force_Ns", 0.0)
         total_distance = hrt_state.get("trial_distance_traveled_m", 0.0)
         target_xy = hrt_state.get("trial_target_xy")
 
@@ -685,6 +690,7 @@ def _record_trial_metrics():
         f"{time_to_target:.2f}" if time_to_target is not None else "",
         f"{target_distance:.4f}" if target_distance is not None else "",
         f"{max_force:.2f}" if max_force is not None else "",
+        f"{total_force_ns:.4f}",
         f"{total_distance:.4f}",
         f"{distance_from_target:.4f}" if distance_from_target is not None else "",
         target_xy[0] if target_xy is not None else "",
@@ -698,7 +704,7 @@ def _record_trial_metrics():
     # Print trial summary
     time_s = f"{time_to_target:.2f}" if time_to_target is not None else "N/A"
     dist_from_tgt = f"{distance_from_target*100:.1f} cm" if distance_from_target is not None else "N/A"
-    print(f"[HRT] Trial metrics: total_distance={total_distance*100:.1f} cm, distance_from_target={dist_from_tgt}, time={time_s} s")
+    print(f"[HRT] Trial metrics: max_force={max_force:.2f} N, total_force={total_force_ns:.2f} N·s, total_distance={total_distance*100:.1f} cm, distance_from_target={dist_from_tgt}, time={time_s} s")
 
 
 # Start input thread
@@ -774,12 +780,13 @@ while True:
                     hrt_state["lock_peak_force_N"] = force_mag
                 hrt_state["lock_total_force_Ns"] = hrt_state.get("lock_total_force_Ns", 0) + force_mag * DT
 
-        # Update trial max force and distance traveled
+        # Update trial max force, total force, and distance traveled
         if hrt_state.get("trial_active"):
             force_mag = np.linalg.norm(f_ext)
-            if force_mag > hrt_state.get("trial_max_force", 0):
-                with hrt_state["lock"]:
+            with hrt_state["lock"]:
+                if force_mag > hrt_state.get("trial_max_force", 0):
                     hrt_state["trial_max_force"] = force_mag
+                hrt_state["trial_total_force_Ns"] = hrt_state.get("trial_total_force_Ns", 0) + force_mag * DT
             last_pos = hrt_state.get("trial_last_pos")
             if last_pos is not None:
                 step_dist = np.linalg.norm(q_0_xy - last_pos)

@@ -50,6 +50,21 @@ def _get_scalar_str(v):
     return str(v)
 
 
+def strip_after_keyword(sentence: str, keywords: list) -> str:
+    """Return the part of sentence after the first occurrence of any keyword (case-insensitive)."""
+    if not sentence or not keywords:
+        return sentence
+    s_lower = sentence.lower()
+    best_end = 0
+    for kw in keywords:
+        pos = s_lower.find(kw.lower())
+        if pos >= 0 and (best_end == 0 or pos < best_end):
+            best_end = pos + len(kw)
+    if best_end <= 0:
+        return sentence
+    return sentence[best_end:].strip() or sentence
+
+
 def _reshape_W3(W3, H2):
     W3 = np.asarray(W3, dtype=np.float64)
     if W3.ndim == 3:
@@ -176,10 +191,11 @@ class EmbeddingToPFPipeline:
     """STT → SBERT → PF params. Holds STT + SBERT; loads once, reuses. Use start_background() + get_latest() in a control loop."""
 
     def __init__(self, stt_config: Optional[STTConfig] = None, model_name: str = DEFAULT_MODEL_NAME,
-                 sbert_cache_dir: Optional[Union[Path, str]] = None):
+                 sbert_cache_dir: Optional[Union[Path, str]] = None, keywords: Optional[list] = None):
         self.stt_config = stt_config or STTConfig()
         self.model_name = model_name
         self.sbert_cache_dir = sbert_cache_dir
+        self.keywords = keywords or []
         self._model = self._pub = self._subscriber = None
         self._latest_sentence: Optional[str] = None
         self._latest_embedding: Optional[np.ndarray] = None
@@ -215,7 +231,8 @@ class EmbeddingToPFPipeline:
             if not event.is_final or not event.text.strip():
                 return
             sentence = event.text.strip()
-            emb = self.model.encode([sentence], convert_to_numpy=True)[0]
+            to_encode = strip_after_keyword(sentence, self.keywords)
+            emb = self.model.encode([to_encode], convert_to_numpy=True)[0]
             ridge, nn = predict_from_embedding(emb, use_ridge=use_ridge, use_nn=use_nn)
             self._on_final_background(sentence, emb, ridge, nn, print_params)
         if self._subscriber is not None:
