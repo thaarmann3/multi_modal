@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import RectBivariateSpline, UnivariateSpline
@@ -242,6 +243,9 @@ class PotentialFieldDiscreteRemodelable(PotentialFieldDiscrete):
                  obstacle_alignment_threshold=0.4,  # Minimum force-obstacle alignment to create obstacle bore (0-1)
                  obstacle_min_distance_multiplier=0.5,  # Skip obstacle if robot within obstacle_width * this multiplier
                  obstacle_max_distance_multiplier=6.0,  # Create obstacle bore if within obstacle_width * this multiplier
+                 # Obstacle bore effort gating (obstacle bores require sustained high effort, should be rare)
+                 obstacle_bore_gamma_threshold=0.65,  # Much higher than field bores; requires strong tunneling intent
+                 obstacle_bore_cooldown_seconds=3.0,  # Long cooldown between obstacle bore creations
                  
                  **kwargs):
         # Initialize field bores before calling super() to avoid AttributeError
@@ -271,6 +275,9 @@ class PotentialFieldDiscreteRemodelable(PotentialFieldDiscrete):
         self.obstacle_alignment_threshold = obstacle_alignment_threshold
         self.obstacle_min_distance_multiplier = obstacle_min_distance_multiplier
         self.obstacle_max_distance_multiplier = obstacle_max_distance_multiplier
+        self.obstacle_bore_gamma_threshold = obstacle_bore_gamma_threshold
+        self.obstacle_bore_cooldown_seconds = obstacle_bore_cooldown_seconds
+        self.last_obstacle_bore_time = 0.0
         
         # Track if alpha was explicitly set BEFORE calling super() (since kwargs might be modified)
         # If alpha was provided in kwargs, mark it as explicit (regardless of value)
@@ -633,14 +640,18 @@ class PotentialFieldDiscreteRemodelable(PotentialFieldDiscrete):
                 min_dist = dist
                 nearest_obs = (obs_key, obs, to_obstacle_norm)
         
-        # Create obstacle bore if nearby obstacle found
+        # Create obstacle bore if nearby obstacle found (requires high effort, should be rare)
         if nearest_obs is not None:
             obs_key, obs, direction = nearest_obs
-            # Create obstacle bore if within reasonable distance
-            # Use a distance threshold based on obstacle width
             max_obstacle_distance = obs['width'] * self.obstacle_max_distance_multiplier
             if min_dist < max_obstacle_distance:
-                self.add_bore(obs['x'], obs['y'], direction, tunneling_intent)
+                # Obstacle bores require much higher gamma and long cooldown
+                current_time = time.time()
+                gamma_ok = tunneling_intent >= self.obstacle_bore_gamma_threshold
+                cooldown_ok = (current_time - self.last_obstacle_bore_time) >= self.obstacle_bore_cooldown_seconds
+                if gamma_ok and cooldown_ok:
+                    self.add_bore(obs['x'], obs['y'], direction, tunneling_intent)
+                    self.last_obstacle_bore_time = current_time
         
         # Also create field bore at current position
         # tunneling_intent (gamma) already represents accumulated uphill effort
@@ -778,6 +789,7 @@ class PotentialFieldDiscreteRemodelable(PotentialFieldDiscrete):
             self.obstacle_bores = {}
             if clear_field_bores:
                 self.field_bores = []
+            self.last_obstacle_bore_time = 0.0  # Reset cooldown when clearing
             self._update_potential()
     
     def get_field_bore_count(self):

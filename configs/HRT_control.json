@@ -39,6 +39,8 @@
     "obstacle_bore_width_multiplier": 0.9,
     "obstacle_bore_strength_multiplier": 0.2,
     "obstacle_bore_distance_falloff_multiplier": 0.6,
+    "obstacle_bore_gamma_threshold": 0.65,
+    "obstacle_bore_cooldown_seconds": 3.0,
     "field_bore_reduction_curve": 0.9,
     "bore_strength_accumulation_rate": 0.08,
     "bore_width_default": 0.2,
@@ -68,7 +70,7 @@
     "sit_to_stand_bar_offset_m": 0.2
   },
   "visualization": {
-    "enabled": true,
+    "enabled": false,
     "plot_update_interval": 40,
     "print_interval": 100
   },
@@ -104,7 +106,9 @@
     "require_similarity": false,
     "debug_skip": false,
     "obstacle_distance_scale": 1.0,
-    "obstacle_amplitude_scale": 2.0,
+    "obstacle_amplitude_scale": 1.75,
+    "obstacle_radius_scale": 0.80,
+    "obstacle_cardinal_snap_threshold": 0.80,
     "obstacle_min_distance_m": 0.05,
     "obstacle_opposite_side": true
   }

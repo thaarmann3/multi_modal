@@ -11,14 +11,9 @@ Supports 5 modalities:
 Operator commands (type in terminal, press Enter):
   modality <1-5>       - Switch modality (1=fixed, 2=touch, 3=touch+LED, 4=touch+voice, 5=all)
   reset                - Move handlebar to global minimum, clear bores
-  position_bar left    - Move bar left of user (for sit-to-stand trials)
-  position_bar right   - Move bar right of user (for sit-to-stand trials)
   start_trial <dir>    - Start cardinal trial (dir: north, south, east, west)
-  start_trial          - Start sit-to-stand trial (when in sit_to_stand mode, no target, manual end)
   end_trial / stop     - End trial and record metrics (type 'stop' to end; no auto-termination)
   lock / unlock        - Freeze robot at current position (lock) or resume (unlock); records peak/total force
-  qualitative <1-7>    - Record qualitative score for current modality
-  sit_to_stand         - Toggle sit-to-stand trial mode
   quit                 - Shutdown
 """
 
@@ -198,7 +193,6 @@ DEADBAND_THRESHOLD = config["filter"]["deadband_threshold"]
 hrt_config = config.get("hrt", {})
 CARDINAL_TARGET_M = hrt_config.get("cardinal_target_distance_m", 0.15)
 TARGET_REACH_TOLERANCE_M = hrt_config.get("target_reach_tolerance_m", 0.03)
-SIT_TO_STAND_OFFSET_M = hrt_config.get("sit_to_stand_bar_offset_m", 0.2)
 
 # Tunneling parameters
 s0 = config["tunneling"]["s0"]
@@ -230,6 +224,8 @@ bore_width_default = pf_config.get("bore_width_default", 0.5)
 obstacle_bore_width_multiplier = pf_config.get("obstacle_bore_width_multiplier", 2.0)
 obstacle_bore_strength_multiplier = pf_config.get("obstacle_bore_strength_multiplier", 0.5)
 obstacle_bore_distance_falloff_multiplier = pf_config.get("obstacle_bore_distance_falloff_multiplier")
+obstacle_bore_gamma_threshold = pf_config.get("obstacle_bore_gamma_threshold", 0.65)
+obstacle_bore_cooldown_seconds = pf_config.get("obstacle_bore_cooldown_seconds", 3.0)
 OBS_DELTA = pf_config.get("obs_delta", 0.1)
 
 voice_config = config.get("voice", {})
@@ -238,6 +234,8 @@ VOICE_REQUIRE_SIMILARITY = voice_config.get("require_similarity", True)
 VOICE_DEBUG_SKIP = voice_config.get("debug_skip", False)
 VOICE_OBSTACLE_DISTANCE_SCALE = voice_config.get("obstacle_distance_scale", 2.0)
 VOICE_OBSTACLE_AMPLITUDE_SCALE = voice_config.get("obstacle_amplitude_scale", 2.5)
+VOICE_OBSTACLE_RADIUS_SCALE = voice_config.get("obstacle_radius_scale", 1.0)
+VOICE_OBSTACLE_CARDINAL_SNAP_THRESHOLD = voice_config.get("obstacle_cardinal_snap_threshold", 0.85)
 VOICE_OBSTACLE_MIN_DISTANCE_M = voice_config.get("obstacle_min_distance_m", 0.08)
 VOICE_OBSTACLE_MIN_RADIUS_M = voice_config.get("obstacle_min_radius_m", 0.03)
 # Obstacle repels: to move robot left, place obstacle on robot's right (opposite side). Model gives
@@ -324,8 +322,7 @@ hrt_state = {
     "command_queue": queue.Queue(),
     "reset_requested": False,
     "shutdown_requested": False,
-    "sit_to_stand_mode": False,  # Bar offset for sit-to-stand
-    "position_bar_requested": None,  # ("left"|"right", offset_m) or None
+    "sit_to_stand_mode": False,  # Bar offset for sit-to-stand (legacy, always False)
     "locked": False,  # lock/unlock: freeze robot, no feedback, record force
     "lock_peak_force_N": 0.0,
     "lock_total_force_Ns": 0.0,  # integral of |F| dt
@@ -343,7 +340,7 @@ CARDINAL_OFFSETS = {
 
 def input_thread_fn():
     """Background thread: read operator commands from stdin."""
-    print("\n[HRT] Operator commands: modality <1-5>, reset, start_trial, end_trial/stop, lock/unlock, qualitative <1-7>, sit_to_stand, quit\n")
+    print("\n[HRT] Operator commands: modality <1-5>, reset, start_trial <dir>, end_trial/stop, lock/unlock, quit\n")
     while True:
         try:
             line = sys.stdin.readline()
@@ -389,6 +386,8 @@ pf_xy = PotentialFieldDiscreteRemodelable(
     obstacle_bore_width_multiplier=obstacle_bore_width_multiplier,
     obstacle_bore_strength_multiplier=obstacle_bore_strength_multiplier,
     obstacle_bore_distance_falloff_multiplier=obstacle_bore_distance_falloff_multiplier,
+    obstacle_bore_gamma_threshold=obstacle_bore_gamma_threshold,
+    obstacle_bore_cooldown_seconds=obstacle_bore_cooldown_seconds,
 )
 pf_xy.clear_obstacles()
 pf_xy.clear_bores(clear_field_bores=True)
@@ -565,42 +564,21 @@ def process_commands():
                     hrt_state["trial_target_xy"] = None
                     continue
 
-                if cmd == "position_bar" or cmd == "pb":
-                    if not args:
-                        print("[HRT] Usage: position_bar left|right")
-                        continue
-                    side = args[0].lower()
-                    if side == "left":
-                        hrt_state["position_bar_requested"] = ("left", SIT_TO_STAND_OFFSET_M)
-                    elif side == "right":
-                        hrt_state["position_bar_requested"] = ("right", SIT_TO_STAND_OFFSET_M)
-                    else:
-                        print("[HRT] Use: position_bar left|right")
-                    continue
-
                 if cmd in ("start_trial", "st"):
-                    if args:
-                        # Cardinal direction trial
-                        direction = args[0]
-                        if direction not in CARDINAL_OFFSETS:
-                            print("[HRT] Invalid direction. Use: north, south, east, west")
-                            continue
-                        if hrt_state["modality"] == MODALITY_FIXED:
-                            print("[HRT] Fixed bar: cardinal trials skipped per procedure.")
-                            continue
-                        target_rel = CARDINAL_OFFSETS[direction]
-                        hrt_state["trial_target_xy"] = target_rel.copy()
-                        hrt_state["trial_type"] = "sit_to_stand" if hrt_state["sit_to_stand_mode"] else "cardinal"
-                        hrt_state["trial_direction"] = direction
-                    else:
-                        # Sit-to-stand trial (no target, manual end)
-                        if not hrt_state.get("sit_to_stand_mode"):
-                            print("[HRT] Enable sit_to_stand mode first, or use: start_trial north|south|east|west")
-                            continue
-                        hrt_state["trial_target_xy"] = None  # No target for sit-to-stand
-                        hrt_state["trial_type"] = "sit_to_stand"
-                        hrt_state["trial_direction"] = ""
-
+                    if not args:
+                        print("[HRT] Usage: start_trial north|south|east|west")
+                        continue
+                    direction = args[0]
+                    if direction not in CARDINAL_OFFSETS:
+                        print("[HRT] Invalid direction. Use: north, south, east, west")
+                        continue
+                    if hrt_state["modality"] == MODALITY_FIXED:
+                        print("[HRT] Fixed bar: cardinal trials skipped per procedure.")
+                        continue
+                    target_rel = CARDINAL_OFFSETS[direction]
+                    hrt_state["trial_target_xy"] = target_rel.copy()
+                    hrt_state["trial_type"] = "cardinal"
+                    hrt_state["trial_direction"] = direction
                     hrt_state["trial_active"] = True
                     hrt_state["trial_start_time"] = time.time()
                     hrt_state["trial_max_force"] = 0.0
@@ -640,27 +618,6 @@ def process_commands():
                     else:
                         print("[HRT] Not locked.")
 
-                if cmd in ("qualitative", "qual"):
-                    if args and args[0].isdigit():
-                        score = int(args[0])
-                        if 1 <= score <= 7:
-                            mod = hrt_state["modality"]
-                            trial_type = hrt_state.get("trial_type") or "N/A"
-                            hrt_metrics_writer.writerow([
-                                datetime.now().isoformat(), mod, MODALITY_NAMES.get(mod, ""),
-                                "qualitative", "", "", "", "", "", "", "", "", "", "", "", score,
-                                hrt_state.get("sit_to_stand_mode", False)
-                            ])
-                            hrt_metrics_file.flush()
-                            print(f"[HRT] Qualitative score {score} recorded for {MODALITY_NAMES[mod]}.")
-                        else:
-                            print("[HRT] Qualitative score must be 1-7.")
-                    else:
-                        print("[HRT] Usage: qualitative <1-7>")
-
-                if cmd in ("sit_to_stand", "sts"):
-                    hrt_state["sit_to_stand_mode"] = not hrt_state["sit_to_stand_mode"]
-                    print(f"[HRT] Sit-to-stand mode: {'ON' if hrt_state['sit_to_stand_mode'] else 'OFF'}")
         except Exception as e:
             print(f"[HRT] Command error: {e}")
 
@@ -731,22 +688,6 @@ while True:
             qx, qy, qz, _, _, _ = rtde_r.getActualTCPPose()
             reset_to_global_minimum(rtde_c, rtde_r, o_nom, qz)
             intent_I = 0.0
-            continue
-
-        # Handle position_bar (for sit-to-stand trials)
-        pos_req = hrt_state.get("position_bar_requested")
-        if pos_req is not None:
-            hrt_state["position_bar_requested"] = None
-            side, offset = pos_req
-            rtde_c.speedStop()
-            time.sleep(0.1)
-            qx, qy, qz, _, _, _ = rtde_r.getActualTCPPose()
-            dx = offset if side == "left" else -offset  # left = +X, right = -X
-            target_abs = np.array([o_nom[0] + dx, o_nom[1], qz, 0, 0, 0])
-            rtde_c.moveL(target_abs.tolist(), MOVE_ACCELERATION, MOVE_ACCELERATION)
-            time.sleep(0.5)
-            rtde_c.zeroFtSensor()
-            print(f"[HRT] Bar positioned to {side} (offset {abs(dx)*100:.0f} cm)")
             continue
 
         qx, qy, qz, qrx, qry, qrz = rtde_r.getActualTCPPose()
@@ -835,10 +776,16 @@ while True:
                         direction = offset / dist
                         new_dist = max(dist * VOICE_OBSTACLE_DISTANCE_SCALE, VOICE_OBSTACLE_MIN_DISTANCE_M)
                         new_offset = direction * new_dist
+                        # Snap to cardinal axes: forward/back with nearly no x offset, left/right with nearly no y offset
+                        dx, dy = abs(direction[0]), abs(direction[1])
+                        if dy >= VOICE_OBSTACLE_CARDINAL_SNAP_THRESHOLD:
+                            new_offset = np.array([0.0, np.sign(direction[1]) * new_dist])
+                        elif dx >= VOICE_OBSTACLE_CARDINAL_SNAP_THRESHOLD:
+                            new_offset = np.array([np.sign(direction[0]) * new_dist, 0.0])
                         obs_x = q_0_xy[0] + new_offset[0]
                         obs_y = q_0_xy[1] + new_offset[1]
                         amplitude = nn["amplitude"] * VOICE_OBSTACLE_AMPLITUDE_SCALE
-                        radius = max(float(nn.get("radius", 0.05)), VOICE_OBSTACLE_MIN_RADIUS_M)
+                        radius = max(float(nn.get("radius", 0.05)) * VOICE_OBSTACLE_RADIUS_SCALE, VOICE_OBSTACLE_MIN_RADIUS_M)
                         pf_xy.add_obstacle(obs_x, obs_y, amplitude, radius)
                         potential_force = -get_potential_force_xy(q_0_xy, pf_xy)
                         gradV = -potential_force
