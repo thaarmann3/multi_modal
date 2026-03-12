@@ -1,0 +1,2 @@
+timestamp,modality,modality_name,trial_type,trial_direction,time_to_target_s,target_distance_m,max_force_N,total_force_Ns,total_distance_traveled_m,distance_from_target_m,target_x,target_y,final_x,final_y,qualitative_score,sit_to_stand_mode
+2026-03-11T19:40:03.135832,4,Touch + voice,cardinal,south,50.16,0.1500,46.43,336.8072,0.6467,0.0708,0.0,-0.15,-0.03657681772426141,-0.21058225718906692,,False

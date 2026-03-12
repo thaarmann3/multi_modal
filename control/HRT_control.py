@@ -12,7 +12,7 @@ Operator commands (type in terminal, press Enter):
   modality <1-5>       - Switch modality (1=fixed, 2=touch, 3=touch+LED, 4=touch+voice, 5=all)
   reset                - Move handlebar to global minimum, clear bores
   start_trial <dir>    - Start cardinal trial (dir: north, south, east, west)
-  end_trial / stop     - End trial and record metrics (type 'stop' to end; no auto-termination)
+  end_trial / stop / s - End trial and record metrics (type 'stop' or 's' to end; no auto-termination)
   lock / unlock        - Freeze robot at current position (lock) or resume (unlock); records peak/total force
   quit                 - Shutdown
 """
@@ -340,7 +340,7 @@ CARDINAL_OFFSETS = {
 
 def input_thread_fn():
     """Background thread: read operator commands from stdin."""
-    print("\n[HRT] Operator commands: modality <1-5>, reset, start_trial <dir>, end_trial/stop, lock/unlock, quit\n")
+    print("\n[HRT] Operator commands: modality <1-5>, reset, start_trial <dir>, end_trial/stop/s, lock/unlock, quit\n")
     while True:
         try:
             line = sys.stdin.readline()
@@ -591,7 +591,7 @@ def process_commands():
                     tgt = hrt_state["trial_target_xy"]
                     print(f"[HRT] Trial started: {hrt_state['trial_type']}" + (f", target={tgt}" if tgt is not None else " (manual end)"))
 
-                if cmd in ("end_trial", "et", "stop"):
+                if cmd in ("end_trial", "et", "stop", "s"):
                     if hrt_state["trial_active"]:
                         _record_trial_metrics()
                         hrt_state["trial_active"] = False
@@ -661,7 +661,7 @@ def _record_trial_metrics():
     # Print trial summary
     time_s = f"{time_to_target:.2f}" if time_to_target is not None else "N/A"
     dist_from_tgt = f"{distance_from_target*100:.1f} cm" if distance_from_target is not None else "N/A"
-    print(f"[HRT] Trial metrics: max_force={max_force:.2f} N, total_force={total_force_ns:.2f} N·s, total_distance={total_distance*100:.1f} cm, distance_from_target={dist_from_tgt}, time={time_s} s")
+    print(f"[HRT] Trial metrics: time={time_s} s, total_distance={total_distance*100:.1f} cm, distance_from_target={dist_from_tgt}, max_force={max_force:.2f} N, impulse={total_force_ns:.2f} N·s")
 
 
 # Start input thread

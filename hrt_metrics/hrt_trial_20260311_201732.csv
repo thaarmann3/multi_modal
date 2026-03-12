@@ -1,0 +1,5 @@
+timestamp,modality,modality_name,trial_type,trial_direction,time_to_target_s,target_distance_m,max_force_N,total_force_Ns,total_distance_traveled_m,distance_from_target_m,target_x,target_y,final_x,final_y,qualitative_score,sit_to_stand_mode
+2026-03-11T20:18:19.675929,4,Touch + voice,cardinal,south,8.05,0.1500,39.85,128.5740,0.2702,0.0374,0.0,-0.15,-0.010059732096396434,-0.18602391343517286,,False
+2026-03-11T20:19:08.112293,4,Touch + voice,cardinal,south,9.56,0.1500,34.50,45.3955,0.2599,0.0028,0.0,-0.15,-0.0005461473148125062,-0.15273682798300792,,False
+2026-03-11T20:20:44.235391,4,Touch + voice,cardinal,south,6.18,0.1500,7.97,4.6566,0.1132,0.0643,0.0,-0.15,-0.005717618945796588,-0.0859850227055704,,False
+2026-03-11T20:21:28.192763,4,Touch + voice,cardinal,south,9.52,0.1500,24.83,62.3045,0.2152,0.0137,0.0,-0.15,-0.013728857959437901,-0.14955688831163153,,False

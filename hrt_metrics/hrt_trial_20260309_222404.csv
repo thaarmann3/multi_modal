@@ -1,2 +1,0 @@
-timestamp,modality,modality_name,trial_type,trial_direction,time_to_target_s,target_distance_m,max_force_N,total_force_Ns,total_distance_traveled_m,distance_from_target_m,target_x,target_y,final_x,final_y,qualitative_score,sit_to_stand_mode
-2026-03-09T22:24:47.256741,5,Touch + voice + LED ring,cardinal,south,11.76,0.1500,55.01,441.5378,0.3992,0.0354,0.0,-0.15,0.014549579567566029,-0.18229285231821482,,False

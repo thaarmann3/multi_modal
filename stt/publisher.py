@@ -4,7 +4,7 @@ import queue
 import sys
 import threading
 import time
-from typing import Callable, List
+from typing import Callable, List, Optional
 
 import sounddevice as sd
 
@@ -19,7 +19,7 @@ def _load_vosk():
 
 
 class STTPublisher:
-    def __init__(self, config: STTConfig | None = None):
+    def __init__(self, config: Optional[STTConfig] = None):
         self.config = config or STTConfig()
         self._subscribers: List[Callable[[TranscriptEvent], None]] = []
         self._subscribers_lock = threading.Lock()
@@ -31,6 +31,7 @@ class STTPublisher:
         self._model = None
         self._recognizer = None
         self._agc = AGC() if self.config.enable_agc else None
+        self._status_stream_usable = True
 
     def subscribe(self, callback: Callable[[TranscriptEvent], None]) -> None:
         with self._subscribers_lock:
@@ -63,10 +64,24 @@ class STTPublisher:
                 except Exception:
                     pass
 
+    def _report_callback_status(self, status) -> None:
+        if not status or not self._status_stream_usable:
+            return
+        stream = getattr(sys, "stderr", None)
+        if stream is None:
+            self._status_stream_usable = False
+            return
+        try:
+            stream.write(str(status) + "\n")
+            stream.flush()
+        except (AttributeError, OSError, ValueError):
+            # The callback can outlive the console handle on Windows; stop logging
+            # status text rather than raising from PortAudio's thread.
+            self._status_stream_usable = False
+
     def _audio_callback(self, indata, frames, time_info, status) -> None:
         # Called by sounddevice from its thread; push raw bytes into queue.
-        if status:
-            sys.stderr.write(str(status) + "\n")
+        self._report_callback_status(status)
         try:
             self._audio_queue.put_nowait(bytes(indata))
         except queue.Full:
@@ -117,6 +132,7 @@ class STTPublisher:
         if self._running:
             return
         self._running = True
+        self._status_stream_usable = True
         self._start_notify_thread()
         self._ensure_model()
         block_frames = int(self.config.sample_rate * self.config.block_ms / 1000)
@@ -141,6 +157,7 @@ class STTPublisher:
         if self._running or self._thread is not None:
             return
         self._running = True
+        self._status_stream_usable = True
         self._thread = threading.Thread(target=self._run_background, daemon=True)
         self._thread.start()
 

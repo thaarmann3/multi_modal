@@ -1,4 +1,0 @@
-timestamp,modality,modality_name,trial_type,trial_direction,time_to_target_s,target_distance_m,max_force_N,total_force_Ns,total_distance_traveled_m,distance_from_target_m,target_x,target_y,final_x,final_y,qualitative_score,sit_to_stand_mode
-2026-03-09T22:26:31.999847,5,Touch + voice + LED ring,cardinal,south,12.82,0.1500,51.13,452.5254,0.4997,0.0183,0.0,-0.15,-0.006257480890518141,-0.16723072126620503,,False
-2026-03-09T22:28:41.580573,5,Touch + voice + LED ring,cardinal,south,12.76,0.1500,50.40,454.7335,0.4070,0.0237,0.0,-0.15,0.009557879912082956,-0.17170983007988172,,False
-2026-03-09T22:29:33.105146,5,Touch + voice + LED ring,cardinal,south,14.16,0.1500,58.42,497.8271,0.5252,0.0157,0.0,-0.15,-0.01483319826963192,-0.1550321965993518,,False

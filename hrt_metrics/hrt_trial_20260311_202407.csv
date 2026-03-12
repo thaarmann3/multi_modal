@@ -1,0 +1,7 @@
+timestamp,modality,modality_name,trial_type,trial_direction,time_to_target_s,target_distance_m,max_force_N,total_force_Ns,total_distance_traveled_m,distance_from_target_m,target_x,target_y,final_x,final_y,qualitative_score,sit_to_stand_mode
+2026-03-11T20:24:51.771519,4,Touch + voice,cardinal,south,8.98,0.1500,20.90,30.9557,0.2047,0.0149,0.0,-0.15,-0.004312264144275879,-0.1357296806235319,,False
+2026-03-11T20:26:07.364105,5,Touch + voice + LED ring,cardinal,south,12.33,0.1500,25.48,64.0340,0.3937,0.0836,0.0,-0.15,-0.0038819486183110374,-0.23346849659367508,,False
+2026-03-11T20:26:33.063544,5,Touch + voice + LED ring,cardinal,south,9.95,0.1500,15.29,34.3073,0.2102,0.0030,0.0,-0.15,-8.952399791817278e-06,-0.15296872298698241,,False
+2026-03-11T20:27:05.107963,5,Touch + voice + LED ring,cardinal,south,4.20,0.1500,0.00,0.0000,0.0223,0.1500,0.0,-0.15,1.1687281903927094e-05,-3.180375452965789e-06,,False
+2026-03-11T20:27:28.101116,5,Touch + voice + LED ring,cardinal,south,9.64,0.1500,11.62,14.9242,0.2004,0.0150,0.0,-0.15,-0.0007342638437439764,-0.1350322623507597,,False
+2026-03-11T20:28:03.165026,5,Touch + voice + LED ring,cardinal,south,9.50,0.1500,26.04,23.7557,0.2020,0.0108,0.0,-0.15,-0.007736832976593944,-0.15753440891701845,,False

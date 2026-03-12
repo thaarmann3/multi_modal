@@ -47,14 +47,14 @@
     "obs_delta": 0.25,
     "obstacles": [
       {
-        "x": 0.55,
-        "y": 0.55,
+        "x": 0.75,
+        "y": 0,
         "height": 100.0,
         "width": 0.3
       },
       {
-        "x": -0.55,
-        "y": -0.55,
+        "x": -0.75,
+        "y": 0,
         "height": 100.0,
         "width": 0.3
       }
@@ -70,12 +70,12 @@
     "sit_to_stand_bar_offset_m": 0.2
   },
   "visualization": {
-    "enabled": false,
+    "enabled": true,
     "plot_update_interval": 40,
     "print_interval": 100
   },
   "leds": {
-    "port": "/dev/cu.usbmodem1101",
+    "port": "COM6",
     "baud": 250000,
     "count": 16,
     "radius": 0.016,
@@ -85,7 +85,7 @@
     "grad_deadband": 5
   },
   "logging": {
-    "enabled": true,
+    "enabled": false,
     "trajectory_dir": "trajectories",
     "filename_prefix": "robot_trajectory_discretized",
     "hrt_metrics_dir": "hrt_metrics",
